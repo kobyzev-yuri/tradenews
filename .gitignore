@@ -15,4 +15,5 @@ datasets/points/lse_kb_game_*.jsonl
 datasets/points/live_accum.jsonl
 datasets/articles/*.json
 !datasets/articles/minimal_example.json
-datasets/lse_gcp_dump/
+datasets/lse_gcp_dump/*
+!datasets/lse_gcp_dump/README.md
