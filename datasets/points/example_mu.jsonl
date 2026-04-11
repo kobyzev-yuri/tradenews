@@ -1,0 +1,1 @@
+{"ticker": "MU", "decision_ts_utc": "2026-03-10T16:00:00+00:00", "articles_fixture_path": "../../fixtures/articles/minimal_example.json", "event_tag": "fixture_smoke", "notes": "Дата в прошлом относительно прогона — yfinance успевает отдать 1d/3d/5d forward closes"}

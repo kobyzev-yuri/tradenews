@@ -1,0 +1,24 @@
+[
+  {
+    "ticker": "MU",
+    "title": "Example: Micron guidance beat (fixture)",
+    "timestamp": "2026-04-08T14:00:00+00:00",
+    "summary": "Micron raised FQ2 revenue guidance above consensus, citing stronger DRAM pricing and datacenter demand; shares rose in after-hours trading.",
+    "link": "https://example.com/news/1",
+    "publisher": "Example",
+    "provider_id": "fixture",
+    "raw_sentiment": null,
+    "cheap_sentiment": 0.65
+  },
+  {
+    "ticker": "MU",
+    "title": "Example: Semiconductor sector macro headline",
+    "timestamp": "2026-04-08T15:30:00+00:00",
+    "summary": "Broader chip stocks sold off as Treasury yields climbed; MU was mentioned alongside peers as investors rotated out of high-beta semis.",
+    "link": "https://example.com/news/2",
+    "publisher": "Example",
+    "provider_id": "fixture",
+    "raw_sentiment": null,
+    "cheap_sentiment": -0.2
+  }
+]

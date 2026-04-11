@@ -1,0 +1,2 @@
+{"ticker": "MU", "decision_ts_utc": "2026-04-08T17:52:00+00:00", "model_id": "ollama:qwen2.5:7b", "bias_predict": 0.57, "confidence_predict": 0.75, "forward_log_return_1d": 0.008, "forward_log_return_3d": -0.012, "forward_log_return_5d": null, "llm_mode": "FULL"}
+{"ticker": "MU", "decision_ts_utc": "2026-04-08T17:52:00+00:00", "model_id": "ollama:llama3.2:3b", "bias_predict": 0.42, "confidence_predict": 0.6, "forward_log_return_1d": 0.008, "forward_log_return_3d": -0.012, "forward_log_return_5d": null, "llm_mode": "FULL"}
