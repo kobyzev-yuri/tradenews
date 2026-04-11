@@ -9,6 +9,11 @@
   PYTHONPATH=. python scripts/snapshot_live_dataset.py \\
     --tickers MU,NBIS,QQQ --articles-dir datasets/articles \\
     --append-points datasets/points/live_accum.jsonl
+
+  # Список из файла (см. datasets/tickers_game_universe.txt):
+  PYTHONPATH=. python scripts/snapshot_live_dataset.py \\
+    --tickers-file datasets/tickers_game_universe.txt \\
+    --articles-dir datasets/articles --append-points datasets/points/live_accum.jsonl
 """
 
 from __future__ import annotations
@@ -36,8 +41,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Live news snapshot per ticker + append DatasetPoint JSONL.")
     ap.add_argument(
         "--tickers",
-        required=True,
-        help="Comma-separated tickers, e.g. MU,NBIS,QQQ",
+        default="",
+        help="Comma-separated tickers, e.g. MU,NBIS,QQQ (если не задан --tickers-file)",
+    )
+    ap.add_argument(
+        "--tickers-file",
+        type=Path,
+        default=None,
+        help="Файл: один тикер на строку, # — комментарий до конца строки",
     )
     ap.add_argument("--articles-dir", type=Path, required=True, help="Where to write article JSON files")
     ap.add_argument(
@@ -63,9 +74,28 @@ def main() -> int:
 
     now = datetime.now(timezone.utc)
     ts_slug = now.strftime("%Y%m%dT%H%M%SZ")
-    tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
+    tickers: list[str] = []
+    if args.tickers_file is not None:
+        if not args.tickers_file.is_file():
+            raise SystemExit(f"Not a file: {args.tickers_file}")
+        seen: set[str] = set()
+        for raw in args.tickers_file.read_text(encoding="utf-8").splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if not line:
+                continue
+            tv = line.upper()
+            if tv not in seen:
+                seen.add(tv)
+                tickers.append(tv)
+    if not tickers and args.tickers.strip():
+        seen = set()
+        for t in args.tickers.split(","):
+            tv = t.strip().upper()
+            if tv and tv not in seen:
+                seen.add(tv)
+                tickers.append(tv)
     if not tickers:
-        raise SystemExit("No tickers")
+        raise SystemExit("Укажите --tickers или --tickers-file с непустым списком")
 
     args.articles_dir.mkdir(parents=True, exist_ok=True)
     args.append_points.parent.mkdir(parents=True, exist_ok=True)

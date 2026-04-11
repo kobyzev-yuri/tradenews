@@ -1,0 +1,26 @@
+# Объединение PREMARKET_STRESS_TICKERS + TICKERS_LONG + TICKERS_FAST (lse config.env).
+# Один тикер на строку; пустые и строки с # игнорируются.
+# Использование: snapshot_live_dataset.py --tickers-file datasets/tickers_game_universe.txt
+#                build_game_dataset_from_kb_dump.sh (после export_lse_gcp_kb_quotes.sh)
+
+# FAST
+SNDK
+NBIS
+ASML
+MU
+LITE
+CIEN
+
+# LONG (дубликаты с другими секциями опущены)
+MSFT
+META
+AMZN
+ORCL
+GC=F
+^VIX
+BZ=F
+
+# PREMARKET_STRESS + пересечения с LONG
+GBPUSD=X
+EURUSD=X
+CL=F

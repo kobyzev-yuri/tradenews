@@ -12,17 +12,21 @@
 
 ### Один вызов на несколько тикеров
 
+Полный universe из lse `config.env` (**PREMARKET_STRESS_TICKERS**, **TICKERS_LONG**, **TICKERS_FAST**) зафиксирован в **`datasets/tickers_game_universe.txt`**.
+
 ```bash
 export NYSE_PROJECT_ROOT=/path/to/nyse
 cd tradenews
 PYTHONPATH=. python scripts/snapshot_live_dataset.py \
-  --tickers MU,NBIS,QQQ,SMH \
+  --tickers-file datasets/tickers_game_universe.txt \
   --articles-dir datasets/articles \
   --append-points datasets/points/live_accum.jsonl \
   --lookback-hours 48 \
   --max-per-ticker 10 \
   --event-tag regular
 ```
+
+Или перечислением: `--tickers MU,NBIS,QQQ,SMH`.
 
 - В `datasets/articles/` появятся файлы вида `MU_20260409T143022Z.json`.
 - В `datasets/points/live_accum.jsonl` **добавятся** строки с `articles_fixture_path` и `decision_ts_utc = UTC сейчас`.
@@ -66,7 +70,7 @@ cat datasets/points/part_a.jsonl datasets/points/part_b.jsonl datasets/points/li
 
 Варианты:
 
-- **Экспорт из PostgreSQL (lse)** — таблицы `knowledge_base` (новости) и `quotes` (дневные свечи); план выгрузки и SQL-примеры: **[`docs/EXPORT_DATASET_POSTGRES_TRADENEWS.md`](../../docs/EXPORT_DATASET_POSTGRES_TRADENEWS.md)** (от корня репозитория `lse/`). После `export_lse_gcp_kb_quotes.sh` конвертер **CSV → JSONL точек**: **`scripts/lse_csv_to_dataset_points.py`**.
+- **Экспорт из PostgreSQL (lse)** — таблицы `knowledge_base` (новости) и `quotes` (дневные свечи); план выгрузки и SQL-примеры: **[`docs/EXPORT_DATASET_POSTGRES_TRADENEWS.md`](../../docs/EXPORT_DATASET_POSTGRES_TRADENEWS.md)** (от корня репозитория `lse/`). Скрипт **`lse/scripts/export_lse_gcp_kb_quotes.sh`** кладёт оба CSV в **`tradenews/datasets/lse_gcp_dump/`**. Затем **`tradenews/scripts/build_game_dataset_from_kb_dump.sh`** строит JSONL точек по **`datasets/tickers_game_universe.txt`** (режим по умолчанию `daily`). Вручную: **`scripts/lse_csv_to_dataset_points.py`**.
 - **Архив снимков** — если вы месяц гоняли `snapshot_live_dataset.py`, уже есть панель во времени.
 - **Править `NewsSource` / Yahoo** под окно «до даты» — отдельная доработка nyse (если API позволяет).
 

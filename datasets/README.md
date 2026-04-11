@@ -1,6 +1,7 @@
 # Датасет tradenews
 
 - **`articles/`** — JSON-массивы статей (формат nyse `serialize_news_article`). На них ссылается `articles_fixture_path` из точек.
+- **`tickers_game_universe.txt`** — объединение PREMARKET_STRESS + TICKERS_LONG + TICKERS_FAST из lse `config.env` (для `snapshot_live_dataset.py --tickers-file` и `build_game_dataset_from_kb_dump.sh`).
 - **`points/*.jsonl`** — по одной строке JSON на **`DatasetPoint`** (см. `docs/dataset_and_metrics_plan.md`).
 - **Чистый датасет под yfinance-метрики:** из KB часто попадают псевдо-тикеры `US_MACRO`, `MACRO`, `CASH`. При сборке из CSV они уже отсекаются флагом **`--exclude-tickers`** (дефолт в `scripts/lse_csv_to_dataset_points.py`). Для уже готового JSONL:  
   `PYTHONPATH=. python scripts/filter_dataset_points_jsonl.py datasets/points/lse_kb_per_row.jsonl --out datasets/points/lse_kb_per_row_equities.jsonl`  

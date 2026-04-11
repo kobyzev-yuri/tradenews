@@ -11,6 +11,7 @@ build/
 .venv/
 runs/
 datasets/points/lse_kb_per_row*.jsonl
+datasets/points/lse_kb_game_*.jsonl
 datasets/points/live_accum.jsonl
 datasets/articles/*.json
 !datasets/articles/minimal_example.json
