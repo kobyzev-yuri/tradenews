@@ -33,11 +33,21 @@ PYTHONPATH=. python scripts/run_compare.py examples/sample_evaluation.jsonl
 
 Облако (OpenAI-совместимый API): `OpenAINewsPredictor` читает **`OPENAI_API_KEY`** или **`OPENAI_GPT_KEY`**, **`OPENAI_BASE_URL`**, **`OPENAI_MODEL`**, **`OPENAI_TIMEOUT`** — как в корневом **`../config.env`** проекта lse.
 
-Запуск из **`tradenews/`** с подхватом ключей из lse (без ручного `export`):
+Два уровня конфигурации:
+
+| Файл | Назначение |
+|------|------------|
+| **`../config.env`** (корень **lse**) | Общие ключи: OpenAI, БД, … Запуск: `with_lse_config_env.sh`. |
+| **`tradenews/config.env`** (локальный, **не в git**) | Переопределения только для tradenews; шаблон: **`config.env.example`**. Запуск: `with_tradenews_config_env.sh` — **локальный перекрывает lse** для одного ключа. |
+
+```bash
+cp config.env.example config.env   # один раз, подставьте значения
+```
+
+Запуск с **только lse** (как раньше):
 
 ```bash
 cd tradenews
-# ${OPENAI_MODEL} подставляется после чтения config.env обёрткой — bash -c обязательна
 ./scripts/with_lse_config_env.sh bash -c 'PYTHONUNBUFFERED=1 PYTHONPATH=. python scripts/build_eval_from_points.py \
   datasets/points/ВАШ.jsonl \
   --models llama3.2:3b qwen2.5:7b openai:${OPENAI_MODEL} \
@@ -45,8 +55,25 @@ cd tradenews
 ./scripts/with_lse_config_env.sh PYTHONPATH=. python scripts/run_compare.py runs/eval_three.jsonl
 ```
 
-Другой путь к `config.env`: **`export LSE_CONFIG_ENV=/path/to/lse/config.env`**. Смок: `./scripts/with_lse_config_env.sh PYTHONPATH=. python scripts/run_openai_predict_fixture.py fixtures/articles/minimal_example.json MU`.  
+Запуск **lse + локальный `config.env`**:
+
+```bash
+./scripts/with_tradenews_config_env.sh bash -c 'PYTHONPATH=. python scripts/run_openai_predict_fixture.py fixtures/articles/minimal_example.json MU'
+```
+
+Пути: **`LSE_CONFIG_ENV`**, **`TRADENEWS_CONFIG_ENV`** (явный файл вместо дефолтов `../config.env` и `./config.env`).  
 Если провайдер не поддерживает `response_format: json_object`, задайте **`TRADENEWS_OPENAI_JSON_OBJECT=0`**.
+
+### Push в GitHub с `GITHUB_TOKEN`
+
+**`GITHUB_TOKEN`** обычно лежит в **`lse/config.env`**; при необходимости продублируйте или переопределите в **`tradenews/config.env`** — push смотрит **сначала локальный tradenews**, потом lse (см. комментарии в `scripts/push_github_from_config_env.sh`). **`remote origin`** — `https://github.com/owner/repo.git`.
+
+```bash
+./scripts/push_github_from_config_env.sh
+# ./scripts/push_github_from_config_env.sh main
+```
+
+Читается только ключ **`GITHUB_TOKEN`** (`scripts/read_lse_config_key.py`), без `source` всего файла.
 
 ## Связь с nyse
 

@@ -1,3 +1,6 @@
+# Локальные секреты tradenews (см. config.env.example)
+config.env
+
 __pycache__/
 *.py[cod]
 .pytest_cache/

@@ -8,7 +8,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Keys tradenews / compare / fixtures read from the environment
+# Keys tradenews / compare / fixtures read from the environment.
+# Держите в синхроне с scripts/load_merged_tradenews_env.py
 _KEYS = frozenset(
     {
         "OPENAI_API_KEY",

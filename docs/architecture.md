@@ -63,6 +63,7 @@ flowchart LR
 - **Генерация строк** (`runner`, позже): dataset + predictors + yfinance → JSONL.
 - **Сравнение моделей** (`tradenews.compare`): одна таблица с колонкой `model_id` → IC, hit rate, страты.
 - **Бенчмарк** (`tradenews.benchmark_report`, CLI `scripts/run_model_benchmark.py`): те же метрики сразу по горизонтам 1d/3d/5d + рейтинг по Spearman IC + опциональный JSON-отчёт.
+- **Конфиг**: корень **lse** `config.env` — общий; **tradenews** — локальный `config.env` (из `config.env.example`, не в git) и `with_tradenews_config_env.sh` (слияние: локальный перекрывает lse).
 
 Так **интеллект** (Ollama / OpenAI / nyse LLM) изолирован в предикторах; **метрики** — чистые функции над числами.
 
