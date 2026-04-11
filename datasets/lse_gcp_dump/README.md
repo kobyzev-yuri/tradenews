@@ -3,8 +3,9 @@
 CSV выгружаются скриптом из корня репозитория **`lse/`**:
 
 ```bash
-export SSH_TARGET=ai8049520@YOUR_VM   # или Host из ~/.ssh/config, напр. gcp-lse
-export DAYS=90                         # окно по ts / date
+# Из корня репозитория lse/. SSH alias gcp-lse — см. lse/docs/GCP_LSE_SSH.md
+export SSH_TARGET=gcp-lse    # дефолт в скрипте; можно не задавать
+export DAYS=90               # окно по ts / date
 ./scripts/export_lse_gcp_kb_quotes.sh
 ```
 
