@@ -22,3 +22,7 @@
 ## ProxyAPI (облачные модели)
 
 Один ключ и OpenAI-совместимый base URL — см. `config.env.example` и `tradenews/proxyapi.py`.
+
+## Дальше: внедрение и регресс тестов
+
+Пошаговый план (fusion с техникой, песочница, проверки при малом объёме новостей): **[news_impulse_plan.md](news_impulse_plan.md)**.

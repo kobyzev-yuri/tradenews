@@ -6,5 +6,6 @@
 - **Код:** `tradenews/metrics.py`, `valuation.py`, `benchmark_report.py`, `predictors/*`.
 - **Смысл метрик и осторожность с N:** [bench.md](bench.md).
 - **Пример отчёта без сырых данных:** [reports/benchmark_game_2026-04-12.md](reports/benchmark_game_2026-04-12.md).
+- **План внедрения новостного импульса и тестов (живой, обновлять по опыту):** [news_impulse_plan.md](news_impulse_plan.md).
 
 Подробный README и команды: [../README.md](../README.md).

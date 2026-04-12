@@ -23,7 +23,8 @@ PYTHONPATH=. python scripts/run_model_benchmark.py runs/eval.jsonl --report-json
 ```
 
 Подробнее по смыслу метрик и ограничениям: **[docs/bench.md](docs/bench.md)**.  
-Пример зафиксированного прогона (таблицы без сырых данных): **[docs/reports/benchmark_game_2026-04-12.md](docs/reports/benchmark_game_2026-04-12.md)**.
+Пример зафиксированного прогона (таблицы без сырых данных): **[docs/reports/benchmark_game_2026-04-12.md](docs/reports/benchmark_game_2026-04-12.md)**.  
+План внедрения новостного сигнала в прод/песочницу и доп. тесты: **[docs/news_impulse_plan.md](docs/news_impulse_plan.md)** (обновлять по мере опыта).
 
 ## Тесты (без сети)
 
