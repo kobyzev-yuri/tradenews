@@ -95,6 +95,8 @@ PYTHONPATH=. python scripts/run_model_benchmark.py \
 - NYSE кладёт **JSONL/Parquet** в общий бакет, ночной job в LSE **заливает** в PG.  
 Экспорт для бенча: SQL/view → **JSONL точек** (`ticker`, `decision_ts`, `articles_snapshot` или путь к фикстуре) — как уже делает tradenews.
 
+**Готовые миграции PostgreSQL** (поля к `knowledge_base`, `market_bars_*`, `news_signal_log`, индексы; совместимо с `init_db.py` и pgvector): репозиторий **lse**, каталог **`db/knowledge_pg/`** (см. `README.md` там; копия может лежать рядом с чекаутом **nyse**).
+
 ### 6.4 Схема «обучения» (без иллюзий про один промпт)
 
 Это **не** обязательно fine-tune LLM с первого дня.
