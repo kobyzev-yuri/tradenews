@@ -23,6 +23,10 @@
 
 Один ключ и OpenAI-совместимый base URL — см. `config.env.example` и `tradenews/proxyapi.py`.
 
+## Отчёты по прогонам
+
+- **Gemini 2.0 Flash vs Qwen 2.5 14B** (2026-04-12): [reports/benchmark_gemini_qwen14_2026-04-12.md](reports/benchmark_gemini_qwen14_2026-04-12.md)
+
 ## Дальше: внедрение и регресс тестов
 
 Пошаговый план (fusion с техникой, песочница, проверки при малом объёме новостей): **[news_impulse_plan.md](news_impulse_plan.md)**.
