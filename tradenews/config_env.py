@@ -36,6 +36,8 @@ TRADENEWS_CONFIG_ENV_KEYS = frozenset(
         "TRADENEWS_OLLAMA_MODELS",
         "TRADENEWS_OLLAMA_ARTICLES_JSON",
         "NYSE_PROJECT_ROOT",
+        # PAT для git push (scripts/push_github_from_config_env.sh); как в lse/config.env.example
+        "GITHUB_TOKEN",
     }
 )
 
