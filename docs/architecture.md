@@ -140,3 +140,7 @@ End-to-end **fusion с техникой** (как в `TradeBuilder`) можно 
 2. Полная реализация **Ollama**-предиктора с парсингом в ту же схему, что `NewsSignalLLMResponse`.
 3. Опционально: импорт длинной истории из **PostgreSQL** (lse) в тот же JSON-формат.
 4. CI: pytest без сети на синтетических рядах и `minimal_example.json`.
+
+## 9. Отчёты по бенчмаркам
+
+Сводки прогонов (методология, таблицы метрик, выводы **без** сырых `runs/*.jsonl`) — каталог **`docs/reports/`**, например [benchmark_game_2026-04-12.md](reports/benchmark_game_2026-04-12.md).
