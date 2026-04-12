@@ -1,9 +1,13 @@
 """
 Облачный LLM через OpenAI-совместимый ``/v1/chat/completions``.
 
-Переменные окружения (совместимо с корневым ``config.env`` проекта lse):
+**ProxyAPI** ([документация](https://proxyapi.ru/docs/openai-compatible-api)): в **tradenews/config.env** —
+``PROXYAPI_KEY`` + ``OPENAI_BASE_URL=https://api.proxyapi.ru/openai/v1`` (опц. ``TRADENEWS_USE_PROXYAPI=1``).
+См. ``tradenews/proxyapi.py``. Отключить: ``TRADENEWS_USE_PROXYAPI=0``.
+
+Без ProxyAPI (прямой OpenAI):
   OPENAI_API_KEY / OPENAI_GPT_KEY — ключ (достаточно одного)
-  OPENAI_BASE_URL — прокси или ``https://api.openai.com/v1``
+  OPENAI_BASE_URL — ``https://api.openai.com/v1`` или другой endpoint
   OPENAI_MODEL — имя модели, если не заданы аргумент конструктора и ``TRADENEWS_OPENAI_MODEL``
   TRADENEWS_OPENAI_MODEL — перекрывает ``OPENAI_MODEL`` только для tradenews
   OPENAI_TIMEOUT — таймаут запроса, секунды (опционально)
@@ -17,6 +21,7 @@ import os
 from datetime import datetime
 from typing import Any, Optional
 
+from tradenews import proxyapi as proxyapi
 from tradenews.ollama_client import parse_news_signal_response
 from tradenews.openai_chat_client import openai_chat_completions
 from tradenews.predictors.base import NewsPrediction, NewsPredictor
@@ -39,17 +44,28 @@ class OpenAINewsPredictor(NewsPredictor):
         env_model = (os.environ.get("TRADENEWS_OPENAI_MODEL") or "").strip() or (
             os.environ.get("OPENAI_MODEL") or ""
         ).strip()
-        self._openai_model = (openai_model or env_model or "gpt-5.4-mini").strip()
-        self._model_id = model_id or f"openai:{self._openai_model}"
-        key = (
-            (api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_GPT_KEY") or "").strip()
-        )
-        if not key:
-            raise ValueError("OPENAI_API_KEY or OPENAI_GPT_KEY is required for OpenAINewsPredictor")
-        self._api_key = key
-        self._base_url = (base_url or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip(
-            "/"
-        )
+        self._logical_model = (openai_model or env_model or "gpt-5.4-mini").strip()
+        self._model_id = model_id or f"openai:{self._logical_model}"
+        if proxyapi.use_proxyapi_routing():
+            pk = (api_key or proxyapi.proxyapi_key() or "").strip()
+            if not pk:
+                raise ValueError(
+                    "ProxyAPI: задайте PROXYAPI_KEY (tradenews/config.env) или см. цепочку ключей в tradenews.proxyapi"
+                )
+            self._api_key = pk
+            self._base_url = (base_url or proxyapi.chat_completions_base_url(multivendor=False)).rstrip("/")
+            self._chat_model = proxyapi.api_model_for_openai(self._logical_model, chat_base_url=self._base_url)
+        else:
+            key = (
+                (api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_GPT_KEY") or "").strip()
+            )
+            if not key:
+                raise ValueError("OPENAI_API_KEY or OPENAI_GPT_KEY is required for OpenAINewsPredictor")
+            self._api_key = key
+            self._base_url = (base_url or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip(
+                "/"
+            )
+            self._chat_model = self._logical_model
         to = (os.environ.get("OPENAI_TIMEOUT") or "").strip()
         if to:
             try:
@@ -76,7 +92,7 @@ class OpenAINewsPredictor(NewsPredictor):
 
         messages = build_ollama_messages(ticker, arts, now=decision_ts_utc)
         raw_text = openai_chat_completions(
-            self._openai_model,
+            self._chat_model,
             messages,
             api_key=self._api_key,
             base_url=self._base_url,
@@ -84,12 +100,15 @@ class OpenAINewsPredictor(NewsPredictor):
         )
         items = parse_news_signal_response(raw_text)
         bias, conf = aggregate_llm_items(items)
+        raw_out: dict[str, Any] = {
+            "openai_model": self._logical_model,
+            "items": items,
+            "text_len": len(raw_text),
+        }
+        if self._chat_model != self._logical_model:
+            raw_out["chat_completions_model"] = self._chat_model
         return NewsPrediction(
             bias=bias,
             confidence=conf,
-            raw={
-                "openai_model": self._openai_model,
-                "items": items,
-                "text_len": len(raw_text),
-            },
+            raw=raw_out,
         )

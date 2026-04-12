@@ -23,6 +23,10 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from tradenews.config_env import apply_default_tradenews_env
+
+apply_default_tradenews_env(tradenews_root=_ROOT)
+
 from tradenews.article_fixture import load_articles_fixture
 from tradenews.predictors.openai_predictor import OpenAINewsPredictor
 

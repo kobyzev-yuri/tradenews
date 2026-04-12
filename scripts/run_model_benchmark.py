@@ -5,14 +5,16 @@
 Режим A — только отчёт по готовому eval:
   PYTHONPATH=. python scripts/run_model_benchmark.py runs/eval.jsonl --report-json runs/benchmark.json
 
-Режим B — сначала сборка eval, затем отчёт:
+Режим B — сначала сборка eval, затем отчёт (``--models`` можно опустить: по умолчанию
+  llama3.2:3b, qwen2.5:7b, openai:$OPENAI_MODEL или gpt-5.4-mini):
   PYTHONPATH=. python scripts/run_model_benchmark.py --build datasets/points/example_mu.jsonl \\
-    --articles-base datasets --models llama3.2:3b openai:gpt-5.4-mini \\
-    --out-jsonl runs/bench.jsonl --report-json runs/benchmark.json
+    --articles-base datasets --out-jsonl runs/bench.jsonl --report-json runs/benchmark.json
 
-С ключами из lse/config.env:
-  ./scripts/with_lse_config_env.sh bash -c \\
-    'PYTHONPATH=. python scripts/run_model_benchmark.py --build ... --out-jsonl runs/bench.jsonl'
+При запуске ``python scripts/run_model_benchmark.py`` из корня tradenews ключи из
+``tradenews/config.env`` и ``../config.env`` подставляются в окружение автоматически
+(``apply_default_tradenews_env``). Обёртка по-прежнему возможна:
+
+  ./scripts/with_tradenews_config_env.sh bash -c 'PYTHONPATH=. python scripts/run_model_benchmark.py ...'
 """
 
 from __future__ import annotations
@@ -28,11 +30,16 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from tradenews.config_env import apply_default_tradenews_env
+
+apply_default_tradenews_env(tradenews_root=_ROOT)
+
 from tradenews.benchmark_report import (
     DEFAULT_HORIZONS,
     benchmark_report_from_eval_jsonl,
     print_benchmark_narrative,
 )
+from tradenews.eval_defaults import default_build_model_specs
 
 
 def _run_build_eval(
@@ -85,7 +92,15 @@ def main() -> int:
         help="Перед отчётом вызвать build_eval_from_points.py для этого файла точек",
     )
     ap.add_argument("--articles-base", type=Path, default=None, help="База для articles_fixture_path")
-    ap.add_argument("--models", nargs="+", default=None, help="С --build: спецификации моделей")
+    ap.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help=(
+            "С --build: модели; если не задано — из env TRADENEWS_EVAL_MODEL_SPECS (config.env) "
+            "или встроенный список (Ollama×2 + openai + deepseek + google)"
+        ),
+    )
     ap.add_argument(
         "--out-jsonl",
         type=Path,
@@ -110,12 +125,31 @@ def main() -> int:
         help="Колонки forward log-return (по умолчанию 1d 3d 5d)",
     )
     ap.add_argument("-q", "--quiet", action="store_true", help="Не печатать таблицы в stdout")
+    ap.add_argument(
+        "--bootstrap-n",
+        type=int,
+        default=800,
+        metavar="N",
+        help="Бутстреп-реплик для 95%% CI Spearman IC по каждой модели (0 — выкл.)",
+    )
+    ap.add_argument(
+        "--perm-n",
+        type=int,
+        default=1000,
+        metavar="N",
+        help="Перестановок для двустороннего p-value Spearman IC (0 — выкл.)",
+    )
+    ap.add_argument("--random-seed", type=int, default=42, help="RNG для бутстрепа и перестановок")
+    ap.add_argument(
+        "--no-prediction-agreement",
+        action="store_true",
+        help="Не считать попарный Spearman bias↔bias на совместных строках",
+    )
     args = ap.parse_args()
 
     eval_path: Path | None = None
     if args.build is not None:
-        if not args.models:
-            ap.error("--build требует --models")
+        models = list(args.models) if args.models else default_build_model_specs()
         if args.out_jsonl is None:
             ap.error("--build требует --out-jsonl")
         out_resolved = args.out_jsonl if args.out_jsonl.is_absolute() else (_ROOT / args.out_jsonl)
@@ -123,7 +157,7 @@ def main() -> int:
         _run_build_eval(
             points=points_resolved,
             out_jsonl=out_resolved,
-            models=list(args.models),
+            models=models,
             articles_base=(
                 (args.articles_base if args.articles_base.is_absolute() else _ROOT / args.articles_base)
                 if args.articles_base is not None
@@ -154,6 +188,10 @@ def main() -> int:
         eval_path,
         horizons=horizons,
         min_abs_predict=args.min_abs_predict,
+        spearman_bootstrap_n=args.bootstrap_n,
+        spearman_perm_n=args.perm_n,
+        random_seed=args.random_seed,
+        include_prediction_agreement=not args.no_prediction_agreement,
     )
     if not args.quiet:
         print_benchmark_narrative(report)

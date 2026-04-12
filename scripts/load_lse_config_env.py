@@ -2,36 +2,19 @@
 """Emit shell `export KEY='value'` for whitelisted keys from config.env (dotenv-like).
 
 config.env is often not valid bash (unquoted colons, stray lines). Do not `source` it whole.
+
+Ключи — ``tradenews.config_env.TRADENEWS_CONFIG_ENV_KEYS`` (единый список с load_merged_tradenews_env).
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Keys tradenews / compare / fixtures read from the environment.
-# Держите в синхроне с scripts/load_merged_tradenews_env.py
-_KEYS = frozenset(
-    {
-        "OPENAI_API_KEY",
-        "OPENAI_GPT_KEY",
-        "OPENAI_BASE_URL",
-        "OPENAI_MODEL",
-        "OPENAI_TIMEOUT",
-        "TRADENEWS_OPENAI_MODEL",
-        "TRADENEWS_OPENAI_JSON_OBJECT",
-        "TRADENEWS_OPENAI_MAX_TOKENS",
-        "TRADENEWS_OPENAI_MAX_TOKENS_PARAM",
-        "OLLAMA_HOST",
-        "OLLAMA_KEEP_ALIVE",
-        "TRADENEWS_OLLAMA_MODELS",
-        "TRADENEWS_OLLAMA_ARTICLES_JSON",
-        "NYSE_PROJECT_ROOT",
-    }
-)
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-
-def _shell_single_quote(s: str) -> str:
-    return "'" + s.replace("'", "'\"'\"'") + "'"
+from tradenews.config_env import parse_env_file, shell_single_quote
 
 
 def main() -> int:
@@ -42,23 +25,9 @@ def main() -> int:
     if not path.is_file():
         print(f"load_lse_config_env: not a file: {path}", file=sys.stderr)
         return 1
-    text = path.read_text(encoding="utf-8", errors="replace")
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[7:].strip()
-        if "=" not in line:
-            continue
-        key, _, rest = line.partition("=")
-        key = key.strip()
-        if key not in _KEYS:
-            continue
-        val = rest.strip()
-        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
-            val = val[1:-1]
-        print(f"export {key}={_shell_single_quote(val)}")
+    vals = parse_env_file(path)
+    for key in sorted(vals):
+        print(f"export {key}={shell_single_quote(vals[key])}")
     return 0
 
 

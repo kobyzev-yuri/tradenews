@@ -14,6 +14,7 @@ from typing import Any, TextIO
 import pandas as pd
 
 from tradenews.compare import compare_models_report, evaluation_jsonl_to_dataframe
+from tradenews.metrics import pairwise_bias_spearman_table
 
 DEFAULT_HORIZONS = (
     "forward_log_return_1d",
@@ -34,20 +35,36 @@ def build_benchmark_report(
     horizons: tuple[str, ...] = DEFAULT_HORIZONS,
     min_abs_predict: float = 0.05,
     eval_path: str | None = None,
+    spearman_bootstrap_n: int = 0,
+    spearman_perm_n: int = 0,
+    random_seed: int = 42,
+    include_prediction_agreement: bool = True,
 ) -> dict[str, Any]:
     """
-    Строит отчёт: ``meta`` + ``horizons`` → summary, ranking по Spearman IC, опционально buckets.
+    Строит отчёт: ``meta`` + ``horizons`` → summary, ranking по Spearman IC, бакеты по моделям.
+
+    В ``meta`` при достаточных колонках: ``prediction_agreement`` — попарный Spearman bias↔bias
+    на строках, где есть все модели.
     """
     meta: dict[str, Any] = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "n_rows": int(len(df)),
         "eval_path": eval_path,
         "min_abs_predict": min_abs_predict,
+        "spearman_bootstrap_n": spearman_bootstrap_n,
+        "spearman_perm_n": spearman_perm_n,
+        "random_seed": random_seed,
     }
     if len(df) and "model_id" in df.columns:
         meta["model_ids"] = sorted(df["model_id"].astype(str).unique().tolist())
     else:
         meta["model_ids"] = []
+
+    if include_prediction_agreement and len(df):
+        pa = pairwise_bias_spearman_table(df)
+        meta["prediction_agreement"] = _df_to_jsonable(pa) if not pa.empty else []
+    else:
+        meta["prediction_agreement"] = []
 
     by_horizon: dict[str, Any] = {}
     for col in horizons:
@@ -59,12 +76,18 @@ def build_benchmark_report(
                 "skipped": "column_missing",
             }
             continue
-        summary, buckets = compare_models_report(df, return_col=col, min_abs_predict=min_abs_predict)
+        summary, buckets = compare_models_report(
+            df,
+            return_col=col,
+            min_abs_predict=min_abs_predict,
+            spearman_bootstrap_n=spearman_bootstrap_n,
+            spearman_perm_n=spearman_perm_n,
+            random_seed=random_seed,
+        )
         rank = summary.sort_values("spearman_ic", ascending=False, na_position="last")
         buck_records: list[dict[str, Any]] | None = None
         if buckets is not None and not buckets.empty:
-            b = buckets.reset_index().rename(columns={"index": "bucket"})
-            buck_records = _df_to_jsonable(b)
+            buck_records = _df_to_jsonable(buckets)
         by_horizon[col] = {
             "summary": _df_to_jsonable(summary),
             "ranking_by_spearman_ic": [
@@ -85,6 +108,10 @@ def benchmark_report_from_eval_jsonl(
     *,
     horizons: tuple[str, ...] = DEFAULT_HORIZONS,
     min_abs_predict: float = 0.05,
+    spearman_bootstrap_n: int = 0,
+    spearman_perm_n: int = 0,
+    random_seed: int = 42,
+    include_prediction_agreement: bool = True,
 ) -> dict[str, Any]:
     p = Path(path)
     df = evaluation_jsonl_to_dataframe(p)
@@ -93,6 +120,10 @@ def benchmark_report_from_eval_jsonl(
         horizons=horizons,
         min_abs_predict=min_abs_predict,
         eval_path=str(p.resolve()),
+        spearman_bootstrap_n=spearman_bootstrap_n,
+        spearman_perm_n=spearman_perm_n,
+        random_seed=random_seed,
+        include_prediction_agreement=include_prediction_agreement,
     )
 
 
@@ -104,6 +135,17 @@ def print_benchmark_narrative(report: dict[str, Any], *, file: TextIO | None = N
     print(f"eval: {meta.get('eval_path')}", file=out)
     print(f"rows: {meta.get('n_rows')}  models: {meta.get('model_ids')}", file=out)
     print(f"generated: {meta.get('generated_utc')}", file=out)
+    bsn = meta.get("spearman_bootstrap_n")
+    psn = meta.get("spearman_perm_n")
+    if bsn or psn:
+        print(
+            f"uncertainty: bootstrap_n={bsn!r} perm_n={psn!r} seed={meta.get('random_seed')!r}",
+            file=out,
+        )
+    pa = meta.get("prediction_agreement") or []
+    if pa:
+        print("\n=== prediction agreement (Spearman bias vs bias, joint rows) ===", file=out)
+        print(pd.DataFrame(pa).to_string(index=False), file=out)
 
     for hname, block in (report.get("horizons") or {}).items():
         print(f"\n=== {hname} ===", file=out)
@@ -125,8 +167,14 @@ def print_benchmark_narrative(report: dict[str, Any], *, file: TextIO | None = N
                 )
         bucks = block.get("confidence_buckets")
         if bucks:
-            print("\n--- confidence buckets ---", file=out)
-            print(pd.DataFrame(bucks).to_string(index=False), file=out)
+            print("\n--- confidence buckets (per model) ---", file=out)
+            bdf = pd.DataFrame(bucks)
+            if "model_id" in bdf.columns:
+                for mid, gb in bdf.groupby("model_id", sort=True):
+                    print(f"\n{mid}", file=out)
+                    print(gb.drop(columns=["model_id"]).to_string(index=False), file=out)
+            else:
+                print(bdf.to_string(index=False), file=out)
 
     max_n = 0
     for block in (report.get("horizons") or {}).values():

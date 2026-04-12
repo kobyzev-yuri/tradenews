@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
-Сборка EvaluationRow JSONL из DatasetPoint + несколько моделей (Ollama и/или OpenAI) + yfinance val.
+Сборка EvaluationRow JSONL из DatasetPoint + несколько моделей (Ollama / OpenAI / DeepSeek / Gemini) + yfinance val.
 
-Пример (только Ollama, как раньше):
+Ключи: **ProxyAPI** — достаточно ``PROXYAPI_KEY`` (или ``TRADENEWS_PROXYAPI_KEY``): все облачные
+модели идут на ``https://openai.api.proxyapi.ru/v1`` с именами вида ``openai/…``, ``gemini/…``,
+``openrouter/deepseek/…`` (см. ``tradenews/proxyapi.py`` и https://proxyapi.ru/docs/openai-compatible-api ).
+Отключить прокси: ``TRADENEWS_USE_PROXYAPI=0`` — тогда нужны прямые ``OPENAI_API_KEY``, ``DEEPSEEK_API_KEY``,
+``GEMINI_API_KEY`` / ``GOOGLE_API_KEY`` и т.д.
+
+Пример:
+  PYTHONPATH=. python scripts/build_eval_from_points.py datasets/points/example_mu.jsonl \\
+    --models llama3.2:3b qwen2.5:7b openai:gpt-5.4-mini deepseek:deepseek-reasoner google:gemini-2.0-flash \\
+    --out runs/example_eval.jsonl
+
+Только Ollama:
   PYTHONPATH=. python scripts/build_eval_from_points.py datasets/points/example_mu.jsonl \\
     --models llama3.2:3b qwen2.5:7b --out runs/example_eval.jsonl
-
-Сравнение с облаком (префикс ``openai:`` — нужен ``OPENAI_API_KEY``):
-  export OPENAI_API_KEY=sk-...
-  PYTHONPATH=. python scripts/build_eval_from_points.py datasets/points/example_mu.jsonl \\
-    --models llama3.2:3b openai:gpt-5.4-mini --out runs/example_eval.jsonl
 
 Явный префикс ``ollama:`` опционален: ``ollama:qwen2.5:7b`` эквивалентен ``qwen2.5:7b``.
 
@@ -35,9 +41,15 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from tradenews.config_env import apply_default_tradenews_env
+
+apply_default_tradenews_env(tradenews_root=_ROOT)
+
 from tradenews.dataset_points import read_dataset_points_jsonl, resolve_articles
 from tradenews.io import evaluation_row_jsonl_line
 from tradenews.predictors.base import NewsPredictor
+from tradenews.predictors.deepseek_predictor import DeepSeekNewsPredictor
+from tradenews.predictors.google_predictor import GoogleNewsPredictor
 from tradenews.predictors.ollama import OllamaNewsPredictor, OllamaNewsPredictorStub
 from tradenews.predictors.openai_predictor import OpenAINewsPredictor
 from tradenews.schemas import EvaluationRow
@@ -45,7 +57,10 @@ from tradenews.valuation import forward_log_returns_from_close
 
 
 def _make_predictor(spec: str, *, stub: bool) -> NewsPredictor:
-    """``openai:MODEL`` → OpenAI API; ``ollama:MODEL`` или просто ``MODEL`` → Ollama."""
+    """
+    ``openai:MODEL`` — OpenAI; ``deepseek:MODEL`` — DeepSeek (OpenAI-совместимый);
+    ``google:MODEL`` / ``gemini:MODEL`` — Google Gemini; ``ollama:MODEL`` или без префикса — Ollama.
+    """
     if stub:
         return OllamaNewsPredictorStub(model_id=f"stub:{spec}")
     s = spec.strip()
@@ -55,12 +70,36 @@ def _make_predictor(spec: str, *, stub: bool) -> NewsPredictor:
         if not model:
             raise ValueError(f"Empty model in spec: {spec!r}")
         return OpenAINewsPredictor(model)
+    if low.startswith("deepseek:"):
+        model = s.split(":", 1)[1].strip()
+        if not model:
+            raise ValueError(f"Empty model in spec: {spec!r}")
+        return DeepSeekNewsPredictor(model)
+    if low.startswith("google:"):
+        model = s.split(":", 1)[1].strip()
+        return GoogleNewsPredictor(model or None, model_id=f"google:{model}" if model else None)
+    if low.startswith("gemini:"):
+        model = s.split(":", 1)[1].strip()
+        gid = f"google:{model}" if model else None
+        return GoogleNewsPredictor(model or None, model_id=gid)
     if low.startswith("ollama:"):
         model = s.split(":", 1)[1].strip()
         if not model:
             raise ValueError(f"Empty model in spec: {spec!r}")
         return OllamaNewsPredictor(model)
     return OllamaNewsPredictor(s)
+
+
+def _llm_mode_for(model_id: str, *, stub: bool) -> str:
+    if stub:
+        return "ollama_stub"
+    if model_id.startswith("openai:"):
+        return "openai_full"
+    if model_id.startswith("deepseek:"):
+        return "deepseek_full"
+    if model_id.startswith("google:"):
+        return "google_full"
+    return "ollama_full"
 
 
 def _resolve_cli_path(p: Path, *, root: Path) -> Path:
@@ -92,7 +131,10 @@ def main() -> int:
         "--models",
         nargs="+",
         required=True,
-        help="Model specs: Ollama name or openai:MODEL_ID (e.g. llama3.2:3b openai:gpt-5.4-mini)",
+        help=(
+            "Specs: OLLAMA_MODEL | ollama:TAG | openai:ID | deepseek:deepseek-reasoner | "
+            "google:gemini-2.0-flash | gemini:gemini-2.0-flash"
+        ),
     )
     ap.add_argument("--out", type=Path, required=True, help="Output JSONL path")
     ap.add_argument(
@@ -195,15 +237,7 @@ def main() -> int:
                     forward_log_return_1d=fwd.get("forward_log_return_1d"),
                     forward_log_return_3d=fwd.get("forward_log_return_3d"),
                     forward_log_return_5d=fwd.get("forward_log_return_5d"),
-                    llm_mode=(
-                        "ollama_stub"
-                        if args.stub
-                        else (
-                            "openai_full"
-                            if pred.model_id.startswith("openai:")
-                            else "ollama_full"
-                        )
-                    ),
+                    llm_mode=_llm_mode_for(pred.model_id, stub=args.stub),
                     extra=extra,
                 )
                 out_f.write(evaluation_row_jsonl_line(row))
