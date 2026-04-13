@@ -73,6 +73,23 @@ PYTHONPATH=. python scripts/run_model_benchmark.py \
 
 Сейчас в LSE новости часто попадают в **`knowledge_base`** (`ts`, `ticker`, `source`, `content`, `sentiment_score`, `insight`) через `news_importer.py` и бота. Для **точного** импульса и последующей калибровки этого мало: нужны **дедуп**, **внешний id/url**, **часовой пояс**, **сырые свечи** с идемпотентным добором.
 
+### 6.0 Как меняются основные таблицы в PostgreSQL (по этапам)
+
+Ниже — **фактические имена** из **`lse/init_db.py`** и миграций **`lse/db/knowledge_pg/sql/`**; старый код не ломается, пока вы не переключаете запросы на новые поля.
+
+| Этап | Таблица | Что происходит |
+|------|---------|----------------|
+| **Уже есть (init_db)** | **`knowledge_base`** | Базовые колонки: `id`, `ts`, `ticker`, `source`, `content`, `sentiment_score`, `insight`, `event_type`, `importance`, `link`, `ingested_at`, опционально **`embedding vector(768)`**, **`outcome_json`**. |
+| **010** | **`knowledge_base`** | **Добавляются** (если ещё нет): `exchange`, `symbol`, `external_id`, `content_sha256`, `raw_payload` (JSONB); частичные **UNIQUE** на `external_id` и `(ticker, link)` при непустых значениях; бэкфилл `symbol = ticker`. |
+| **020** | **`market_bars_daily`**, **`market_bars_1h`** | **Новые** таблицы OHLCV рядом с legacy **`quotes`** (игра и старые отчёты могут жить на `quotes`; разметка forward-return и сверка с tradenews — на `market_bars_*`). |
+| **030** | **`news_signal_log`** | **Новая** таблица: снимок решения (`decision_ts_utc`, `symbol`, `model_id`, `bias`, `confidence`, **`knowledge_base_ids[]`**, опц. `tech_bias`, `trade_id`, `extra`). |
+| **040** | **`knowledge_base`** | **Индексы:** BRIN/`ticker+ts`, `exchange+ts`, `symbol+ts`, GIN по `raw_payload` — только ускорение выборок, схема строки та же. |
+| **Дальше (по необходимости, отдельные миграции)** | **`knowledge_base`** | Поля вроде **`story_cluster_id`**, **`cluster_canonical`** (см. §8.6) — когда зафиксируете правила L2-кластеров. |
+| **Дальше (опционально)** | **`news_story_cluster`** | Кластер как сущность: id, время, опц. центроид эмбеддинга — удобно пересчитывать офлайн. |
+| **Дальше (опционально)** | **`news_document`** | Вынести длинный body из горячей строки KB; в **`knowledge_base`** — ссылка + excerpt (§6.1). |
+
+**Итог:** «основная» таблица новостей остаётся **`knowledge_base`**, она **расширяется колонками**; появляются **две таблицы баров** и **лог сигналов**; кластеры и вынесенный текст — **следующий слой**, когда понадобится. Legacy **`quotes`** и поведение игры **не удаляются** на этих шагах.
+
 ### 6.1 Что поправить в заполнении новостей
 
 | Проблема | Направление |
@@ -86,11 +103,10 @@ PYTHONPATH=. python scripts/run_model_benchmark.py \
 
 ### 6.2 Свечи: дневные обязательно, часовые — по необходимости
 
-**Минимум для лог-доходностей 1d/3d/5d(6d):** таблица **`bars_daily`**:  
-`(symbol, exchange, trade_date, open, high, low, close, volume, source, ingested_at)` с **`PRIMARY KEY (symbol, exchange, trade_date)`** и upsert из **yfinance / Polygon / IB** (один выбранный провайдер на тип инструмента).
+**Минимум для лог-доходностей 1d/3d/5d(6d):** в миграциях **`market_bars_daily`**:  
+`(exchange, symbol, trade_date, ohlcv, source, ingested_at)` с **`PRIMARY KEY (exchange, symbol, trade_date)`** и upsert из **yfinance / Polygon / IB** (один провайдер на тип инструмента). Legacy-таблица **`quotes`** в LSE остаётся для существующего кода.
 
-**Часовые (`bars_1h`)** — если нужны техника 5m-уровня **или** выход внутри дня в модели:  
-`(symbol, exchange, bar_start_utc, ohlcv, source)` + то же **идемпотентное** обновление. Начинать можно **только с тикеров из GAME/портфеля**, не со всего рынка.
+**Часовые:** **`market_bars_1h`** — если нужны уточнения внутри дня; то же **идемпотентное** обновление. Начинать можно **только с тикеров из GAME/портфеля**, не со всего рынка.
 
 ### 6.3 Связка LSE ↔ NYSE (tradenews)
 
@@ -105,7 +121,7 @@ PYTHONPATH=. python scripts/run_model_benchmark.py \
 Это **не** обязательно fine-tune LLM с первого дня.
 
 1. **Сбор:** каждая точка решения — строка **`signal_log`**: `decision_ts`, `symbol`, `model_id`, `bias`, `confidence`, `news_ids[]`, опционально `tech_bias`, `trade_id`.  
-2. **Метка доходности:** офлайн-джоб читает `bars_daily` (и при необходимости `bars_1h`), считает **`forward_log_return_1d/3d/6d`** по тем же правилам, что tradenews `valuation.py` (одинаковая семантика «close» и календаря).  
+2. **Метка доходности:** офлайн-джоб читает **`market_bars_daily`** (и при необходимости **`market_bars_1h`**), считает **`forward_log_return_1d/3d/6d`** по тем же правилам, что tradenews `valuation.py` (одинаковая семантика «close» и календаря).  
 3. **Калибровка:** sklearn / pandas: признаки = выход LLM + число новостей + час дня; цель = знак доходности или квантиль → **Platt / isotonic / логрег**; отчёт ROC / Brier / Spearman на holdout по времени.  
 4. **Тонкий fine-tune (опционально):** когда накоплены **тысячи** строк с стабильной разметкой — LoRA на парах (текст статей → метка), отдельно от LSE-крона.  
 5. **Валидация:** разрез по **времени** и по **тикеру**, не случайное перемешивание.
